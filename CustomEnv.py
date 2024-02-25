@@ -26,6 +26,7 @@ class CustomEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None, options=None):
+        print("The options passed to reset function : ",options)
         sumo_binary = checkBinary('sumo') #use sumo-gui for gui
 
         # Start SUMO as a subprocess and connect with TraCI
@@ -41,4 +42,4 @@ class CustomEnv(gym.Env):
         ...
 
     def close(self):
-        ...
+        traci.close()
