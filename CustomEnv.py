@@ -4,6 +4,7 @@ from gymnasium import spaces
 import traci
 from sumo import checkBinary
 
+N_DISCRETE_ACTIONS = 4 # [ increase speed , decrease speed , maintain speed , change lane]
 
 class CustomEnv(gym.Env):
     """Custom Environment that follows gym interface."""
@@ -15,7 +16,7 @@ class CustomEnv(gym.Env):
         # Define action and observation space
         # They must be gym.spaces objects
         # Example when using discrete actions:
-        self.action_space = spaces.Discrete(N_DISCRETE_ACTIONS)
+        self.action_space = spaces.Discrete(N_DISCRETE_ACTIONS) 
         # Example for using image as input (channel-first; channel-last also works):
         self.observation_space = spaces.Box(low=0, high=255,
                                             shape=(N_CHANNELS, HEIGHT, WIDTH), dtype=np.uint8)
@@ -30,6 +31,7 @@ class CustomEnv(gym.Env):
         # Start SUMO as a subprocess and connect with TraCI
         traci.start([sumo_binary, "-c", "./maps/singlelane/singlelane.sumocfg",
                  "--tripinfo-output", "tripinfo.xml"])
+        
         # run the simulation a 20 steps to load the car into scene
         for i in range(5):
             traci.simulationStep()
