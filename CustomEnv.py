@@ -1,6 +1,8 @@
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+import traci
+from sumo import checkBinary
 
 
 class CustomEnv(gym.Env):
@@ -23,7 +25,14 @@ class CustomEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None, options=None):
-        ...
+        sumo_binary = checkBinary('sumo') #use sumo-gui for gui
+
+        # Start SUMO as a subprocess and connect with TraCI
+        traci.start([sumo_binary, "-c", "./maps/singlelane/singlelane.sumocfg",
+                 "--tripinfo-output", "tripinfo.xml"])
+        # run the simulation a 20 steps to load the car into scene
+        for i in range(5):
+            traci.simulationStep()
         return observation, info
 
     def render(self):
