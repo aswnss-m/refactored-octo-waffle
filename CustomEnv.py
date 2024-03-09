@@ -16,9 +16,9 @@ Helper functions
 """
 
 def leader_exists(follower):
-    leader_info = traci.vehicle.getLeader(follower)
+    (id, headway) = traci.vehicle.getLeader(follower)
     if leader_info:
-        return leader_info[0], leader_info[1]
+        return id,headway
     else:
         return None, None
 
