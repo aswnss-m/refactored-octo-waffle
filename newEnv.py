@@ -26,6 +26,7 @@ EXPLORATION_DECAY = 0.99
 Helper functions
 """
 
+print("Phase 1")
 
 def leader_exists(follower):
     leader_info = traci.vehicle.getLeader(follower)
@@ -33,19 +34,25 @@ def leader_exists(follower):
         # Assuming leader_info is a tuple where the first element is the leader's ID
         # and the second element is the secure gap. Adjust this according to the actual structure.
         leader_id, secure_gap = leader_info
+        print("Leader_ID: ", leader_id, "  Secure_Gap: ", secure_gap)
         return leader_id, secure_gap
     else:
+        print("No Leader Found!")
         return None, None
 
 
 def change_speed(veh_id, new_speed):
     traci.vehicle.setSpeed(veh_id, new_speed)
+    print("Speed changed")
 
+print("Phase 2")
 
 class TraciEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
     metadata = {"render_modes": ["human"], "render_fps": 30}
+
+    print("Metadata created")
 
     def __init__(self):
         super(TraciEnv, self).__init__()
@@ -65,15 +72,17 @@ class TraciEnv(gym.Env):
         traci.start([self.sumo_binary, "-c", "./maps/singlelane/singlelane.sumocfg",
                      "--tripinfo-output", "tripinfo.xml"])
         # run the simulation a 20 steps to load the car into scene
-        for i in range(5):
+        for i in range(20):
             traci.simulationStep()
 
         # initial observation will include follower cars details
         self.vehicle_ids = traci.vehicle.getIDList()  # get the ids of the vehicles
-        self.actorVehicle = self.vehicle_ids[1]  # Changed index to 0 for the first vehicle
+        self.actorVehicle = self.vehicle_ids[0]  # Changed index to 0 for the first vehicle
         self.actorVehicle_speed = traci.vehicle.getSpeed(self.actorVehicle)
         self.leader_id, self.headway = leader_exists(self.actorVehicle)
         self.observation = (self.actorVehicle, self.actorVehicle_speed, self.leader_id, self.headway)
+
+        print("Initialized")
 
     def step(self, action):
         traci.simulationStep()  # take next step
@@ -116,13 +125,16 @@ class TraciEnv(gym.Env):
 
         info = {}
         observation = np.array(self.observation).astype(np.float32)
+
+        print("Step function")
+
         return observation, reward, self.done, False, info
 
     def reset(self, seed=None, options=None):
         self.done = False
 
         # run the simulation a 20 steps to load the car into scene
-        for i in range(5):
+        for i in range(20):
             traci.simulationStep()
 
         # initial observation will include follower cars details
@@ -145,10 +157,16 @@ class TraciEnv(gym.Env):
         elif self.headway < -500.0:
             self.headway = -500.0
 
+        print("Reset function")
+
         return np.array(self.observation).astype(np.float32), {}
 
     def render(self):
+        print("Render function")
         pass
 
     def close(self):
         traci.close()
+        print("Close function")
+
+print("Phase 3")
