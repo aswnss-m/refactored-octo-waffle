@@ -30,6 +30,7 @@ print("Phase 1")
 
 def leader_exists(follower):
     leader_info = traci.vehicle.getLeader(follower)
+    print(follower)
     if leader_info is not None:
         # Assuming leader_info is a tuple where the first element is the leader's ID
         # and the second element is the secure gap. Adjust this according to the actual structure.
@@ -72,7 +73,7 @@ class TraciEnv(gym.Env):
         traci.start([self.sumo_binary, "-c", "./maps/singlelane/singlelane.sumocfg",
                      "--tripinfo-output", "tripinfo.xml"])
         # run the simulation a 20 steps to load the car into scene
-        for i in range(20):
+        for i in range(25):
             traci.simulationStep()
 
         # initial observation will include follower cars details
@@ -170,3 +171,21 @@ class TraciEnv(gym.Env):
         print("Close function")
 
 print("Phase 3")
+
+
+ # self.q_table = np.zeros((N_DISCRETE_ACTIONS,N_DISCRETE_ACTIONS))
+  # for i in range(20):
+        #     traci.simulationStep()
+        
+        # self.vehicles = traci.vehicle.getIDList()
+        
+        # if traci.vehicle.getLeader(self.vehicles[0]) is None:
+        #     self.leader = self.vehicles[0]
+        #     self.follower = self.vehicles[1]
+        # else:
+        #     self.leader = self.vehicles[1]
+        #     self.follower = self.vehicles[0]
+        
+        # current_speed_follower = traci.vehicle.getSpeed(self.follower)
+        # current_headway = traci.vehicle.getLeader(self.follower)[1]
+        # self.observation = (current_speed_follower, current_headway)
