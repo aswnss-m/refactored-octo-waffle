@@ -7,9 +7,9 @@ from sumolib import checkBinary
 # Global Variables
 TOTAL_STEPS = 3000
 
-class PlatooningEnv(gym.Env):
+class PlatooningEnvAcc(gym.Env):
     def __init__(self):
-        super(PlatooningEnv, self).__init__()
+        super(PlatooningEnvAcc, self).__init__()
 
         # Initialize step count
         self.STEPS = 0
@@ -38,11 +38,12 @@ class PlatooningEnv(gym.Env):
 
         # Execute action
         if action == 0:
-            traci.vehicle.setSpeed(self.follower, 20)
+            traci.vehicle.setAcceleration(self.follower, 20,10)
         elif action == 1:
-            traci.vehicle.setSpeed(self.follower, 10)
+            traci.vehicle.setAcceleration(self.follower, 10,10)
         else:
-            traci.vehicle.setSpeed(self.follower, 15)
+            traci.vehicle.setAcceleration(self.follower, 0,10)
+
 
         # Compute reward
         score = 0
@@ -53,7 +54,7 @@ class PlatooningEnv(gym.Env):
         if leader_info is not None:
             leader_id, current_headway = leader_info
             if current_headway < 10:
-                score -= 2
+                score -= 1
             elif current_headway > 20:
                 score -= 10
             else:
@@ -62,7 +63,7 @@ class PlatooningEnv(gym.Env):
             self.headway_details.append(current_headway)
         else:
             # If there's no leader, consider it a bad situation
-            score -= 10
+            score += 1
 
         # Update observation
         observation = np.array([current_speed_follower, current_headway], dtype=np.float32)

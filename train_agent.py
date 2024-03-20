@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from PlatooningEnv import PlatooningEnv  # Import the environment we created earlier
-
+from PlatooningEnvAcc import PlatooningEnvAcc  # Import the environment we created earlier
 # Create a function to define and train the agent
 def train_agent():
     # Create the environment
