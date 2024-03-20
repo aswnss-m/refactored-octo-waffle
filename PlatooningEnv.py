@@ -38,11 +38,11 @@ class PlatooningEnv(gym.Env):
 
         # Execute action
         if action == 0:
-            traci.vehicle.setSpeed(self.follower, 20)
+            traci.vehicle.setSpeed(self.follower, 20) #close gap
         elif action == 1:
-            traci.vehicle.setSpeed(self.follower, 10)
+            traci.vehicle.setSpeed(self.follower, 10) #decrease gap
         else:
-            traci.vehicle.setSpeed(self.follower, 15)
+            traci.vehicle.setSpeed(self.follower, 15) #maintain gap
 
         # Compute reward
         score = 0

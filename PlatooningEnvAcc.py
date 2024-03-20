@@ -38,11 +38,11 @@ class PlatooningEnvAcc(gym.Env):
 
         # Execute action
         if action == 0:
-            traci.vehicle.setAcceleration(self.follower, 20,10)
+            traci.vehicle.setAcceleration(self.follower, 20,10) #close gap
         elif action == 1:
-            traci.vehicle.setAcceleration(self.follower, 10,10)
+            traci.vehicle.setAcceleration(self.follower, 10,10) #decrease gap
         else:
-            traci.vehicle.setAcceleration(self.follower, 0,10)
+            traci.vehicle.setAcceleration(self.follower, 0,10) #maintain gap
 
 
         # Compute reward
