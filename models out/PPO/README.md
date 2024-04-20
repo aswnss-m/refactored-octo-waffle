@@ -1,10 +1,10 @@
 algorithm : PPO
-timestep : 10000
+timestep : 20000
 changing_factor : speed
 policy : mlppolicy
-Mean : 16.45459999616108
-Median : 14.28914861220791
-Std : 10.115570056194155
+Mean : 14.908902554385676
+Median : 13.009290161965943
+Std : 9.013803578925085
 
 algorithm : PPO
 timestep : 20000
