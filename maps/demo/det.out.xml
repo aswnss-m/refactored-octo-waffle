@@ -20,5 +20,7 @@
 </configuration>
 -->
 
-<tripinfos xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/tripinfo_file.xsd">
-</tripinfos>
+<detector xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/det_e1_file.xsd">
+    <interval begin="0.00" end="500.00" id="det_0" nVehContrib="40" flow="288.00" occupancy="4.00" speed="10.00" harmonicMeanSpeed="10.00" length="5.00" nVehEntered="40"/>
+    <interval begin="500.00" end="1000.00" id="det_0" nVehContrib="40" flow="288.00" occupancy="4.00" speed="10.00" harmonicMeanSpeed="10.00" length="5.00" nVehEntered="40"/>
+</detector>
