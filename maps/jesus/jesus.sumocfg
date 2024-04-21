@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2024-04-20 13:07:44 by Eclipse SUMO sumo Version 1.18.0
+-->
+
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="jesus.net.xml"/>
+        <route-files value="jesus.rou.xml"/>
+    </input>
+
+    <time>
+        <!-- Set the duration of the simulation in seconds -->
+        <end value="3600"/> <!-- Change the value to the desired duration (e.g., 3600 seconds for 1 hour) -->
+    </time>
+
+</configuration>

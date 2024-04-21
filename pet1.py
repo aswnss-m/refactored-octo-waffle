@@ -7,7 +7,7 @@ env = PlatooningEnv()
 env.initialize_after_steps(21)
 
 # Define the number of episodes
-NUM_EPISODES = 10  # For example, run 10 episodes
+NUM_EPISODES = 5  # For example, run 10 episodes
 
 # Run episodes
 for episode in range(NUM_EPISODES):
@@ -28,7 +28,8 @@ for episode in range(NUM_EPISODES):
     print(f"Episode {episode + 1}: Total Reward = {total_reward}")
 
 # Save headway data
+print("Number of headway details:", len(env.headway_details))
 env.save_headway_to_csv("headway_data.csv")
-env.save_headway_plot("headway_plot.png")
+env.save_headway_plot()
 # Close environment
 env.close()

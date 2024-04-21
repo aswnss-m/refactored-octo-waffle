@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<<<<<<< HEAD
-<!-- generated on 2024-04-20 19:29:49 by Eclipse SUMO sumo Version 1.19.0
-=======
-<!-- generated on 2024-03-20 22:20:51 by Eclipse SUMO sumo Version 1.18.0
->>>>>>> 1eae792ce15a7d3053f2a77f9814c1ab1d81d440
+<!-- generated on 2024-04-21 16:19:29 by Eclipse SUMO sumo Version 1.19.0
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
 
     <input>
@@ -18,11 +14,7 @@
     </output>
 
     <traci_server>
-<<<<<<< HEAD
-        <remote-port value="58291"/>
-=======
-        <remote-port value="62468"/>
->>>>>>> 1eae792ce15a7d3053f2a77f9814c1ab1d81d440
+        <remote-port value="51914"/>
     </traci_server>
 
 </configuration>
