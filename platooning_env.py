@@ -1,17 +1,17 @@
-import gymnasium as gym
 import numpy as np
 import traci
 from sumolib import checkBinary
 import pandas as pd
 import matplotlib.pyplot as plt
+from pettingzoo import AECEnv
 
-TOTAL_STEPS = 1000
+TOTAL_STEPS = 5000
 
-class PlatooningEnv(gym.Env):
+class PlatooningEnv(AECEnv):
     """
-    Custom Gym environment for vehicle platooning using SUMO simulation.
+    Custom AEC environment for vehicle platooning using SUMO simulation.
     """
-    def __init__(self, sumo_cfg_path="./maps/demo/demo.sumocfg"):
+    def __init__(self, sumo_cfg_path="./maps/jesus/jesus.sumocfg"):
         """
         Initialize PlatooningEnv.
 
@@ -28,8 +28,6 @@ class PlatooningEnv(gym.Env):
         self.follower = None
         self.STEPS = 0
         self.headway_details = []
-        self.action_spaces = {}
-        self.observation_spaces = {}
         self.initialized = False
 
     def _start_sumo(self):
@@ -58,35 +56,23 @@ class PlatooningEnv(gym.Env):
 
         self.initialized = True
         self.agents = traci.vehicle.getIDList()
-        self.action_spaces = {agent: gym.spaces.Discrete(3) for agent in self.agents}
-        self.observation_spaces = {
-            agent: gym.spaces.Box(low=np.array([0, 0]), high=np.array([50, 50]), dtype=np.float32)
-            for agent in self.agents
-        }
 
-        vehicles = traci.vehicle.getIDList()
-        for i, vehicle_id in enumerate(vehicles):
-            if traci.vehicle.getLeader(vehicle_id) is None:
-                self.leader = vehicle_id
-                self.follower = vehicles[(i + 1) % len(vehicles)]
-                break
-
-    def step(self, action):
+    def step(self, action_dict):
         """
         Execute a step in the environment.
 
         Args:
-            action (dict): Dictionary mapping agent IDs to their corresponding actions.
+            action_dict (dict): Dictionary mapping agent IDs to their corresponding actions.
 
         Returns:
-            tuple: Tuple containing observations, rewards, done flag, truncated flag, and additional info.
+            tuple: Tuple containing observations, rewards, done flag, and additional info.
         """
         if not self.initialized:
-            return self.observe(self.agents), {agent: 0 for agent in self.agents}, False, False, {}
+            return self.observe(self.agents), {agent: 0 for agent in self.agents}, {agent: False for agent in self.agents}, {}
 
         self.STEPS += 1
 
-        for agent, act in action.items():
+        for agent, act in action_dict.items():
             try:
                 traci.vehicle.setSpeed(agent, 20 if act == 0 else (10 if act == 1 else 15))
             except traci.exceptions.TraCIException as e:
@@ -94,46 +80,28 @@ class PlatooningEnv(gym.Env):
 
         traci.simulationStep()
 
-        # Record headway details for all agents
-        headways = {}
-        for agent in self.agents:
-            leader_info = traci.vehicle.getLeader(agent)
-            if leader_info is not None:
-                _, current_headway = leader_info
-                headways[agent] = current_headway
-            else:
-                headways[agent] = -1  # Placeholder value for missing leader
-        self.headway_details.append(headways)
-
-        # Compute reward
         rewards = {}
         for agent in self.agents:
+            current_headway = 0
             try:
-                current_speed_follower = traci.vehicle.getSpeed(agent)
                 leader_info = traci.vehicle.getLeader(agent)
                 if leader_info is not None:
                     _, current_headway = leader_info
-                    leader_speed = traci.vehicle.getSpeed(leader_info[0])
-                    # Reward for maintaining safe headway and speed
-                    if current_headway >= 10 and current_headway <= 20:
-                        rewards[agent] = 0.1 * leader_speed  # Reward for maintaining safe headway
-                    else:
-                        rewards[agent] = -1  # Penalize for unsafe headway
-                    # Penalize for exceeding speed limit
-                    if current_speed_follower > 20:
-                        rewards[agent] -= 0.5 * (current_speed_follower - 20)
-                    # Additional reward for maintaining platooning speed
-                    rewards[agent] += 0.1 * (20 - abs(current_speed_follower - 20))
+                rewards[agent] = 0
+                if current_headway < 10:
+                    rewards[agent] -= 2
+                elif current_headway > 20:
+                    rewards[agent] -= 10
                 else:
-                    rewards[agent] = -1  # Penalize for not having a leader
+                    rewards[agent] += 5
+                self.headway_details.append(current_headway)
             except traci.exceptions.TraCIException as e:
                 print(f"Error computing rewards for agent {agent}: {e}")
 
-        done = self.STEPS >= TOTAL_STEPS
-        truncated = False
+        done = {agent: self.STEPS >= TOTAL_STEPS for agent in self.agents}
         info = {}
 
-        return self.observe(self.agents), rewards, done, truncated, info
+        return self.observe(self.agents), rewards, done, info
 
     def observe(self, agents):
         """
@@ -152,8 +120,6 @@ class PlatooningEnv(gym.Env):
                 leader_info = traci.vehicle.getLeader(agent)
                 if leader_info is not None:
                     current_headway = leader_info[1]
-                    self.headway_details.append(current_headway)
-
                 else:
                     current_headway = 100
                 observations[agent] = np.array([current_speed_follower, current_headway], dtype=np.float32)
@@ -180,7 +146,6 @@ class PlatooningEnv(gym.Env):
 
         return self.observe(self.agents)
 
-
     def close(self):
         """
         Close the environment.
@@ -200,25 +165,20 @@ class PlatooningEnv(gym.Env):
         std_headway = headway_df["Headway"].std()
         return mean_headway, median_headway, std_headway
 
-    def save_headway_plot(self, filename="headway_plot"):
+    def save_headway_plot(self, filename="headway_plot.png"):
         """
-        Save a plot of headway data for each agent separately to a file.
+        Save a plot of headway data to a file.
 
         Args:
-            filename (str): Base name of the file to save the plots.
+            filename (str): Name of the file to save the plot.
         """
-        headway_df = pd.read_csv("headway_data.csv")  # Read headway data from CSV
-
-        # Iterate over each agent's headway data
-        for column in headway_df.columns:
-            if column != "ev_0":  # Exclude the ev_0 column
-                plt.figure(figsize=(15, 5))
-                plt.plot(headway_df.index, headway_df[column])
-                plt.xlabel("Time Step")
-                plt.ylabel("Headway")
-                plt.title(f"Headway of Agent {column} over Time")
-                plt.savefig(f"{filename}_{column}.png")  # Save plot to a separate image file
-                plt.close()  # Close the plot to release memory
+        headway_df = pd.DataFrame(self.headway_details, columns=["Headway"])
+        plt.figure(figsize=(15, 5))
+        plt.plot(headway_df.index, headway_df["Headway"])
+        plt.xlabel("Time Step")
+        plt.ylabel("Headway")
+        plt.title("Headway over Time")
+        plt.savefig(filename)
 
     def save_headway_to_csv(self, filename="headway_data.csv"):
         """
@@ -227,9 +187,5 @@ class PlatooningEnv(gym.Env):
         Args:
             filename (str): Name of the CSV file.
         """
-        # Filter out numerical headway values and keep only dictionaries
-        headway_dicts = [entry for entry in self.headway_details if isinstance(entry, dict)]
-        # Convert list of dictionaries to DataFrame
-        headway_df = pd.DataFrame(headway_dicts)
-        # Save DataFrame to CSV
+        headway_df = pd.DataFrame(self.headway_details, columns=["Headway"])
         headway_df.to_csv(filename, index=False)
