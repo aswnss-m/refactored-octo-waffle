@@ -11,7 +11,7 @@ class PlatooningEnv(AECEnv):
     """
     Custom PettingZoo environment for vehicle platooning using SUMO simulation.
     """
-    def __init__(self, sumo_cfg_path="./maps/thampanoor/thampanoor.sumocfg"):
+    def __init__(self, sumo_cfg_path="./maps/cross/cross_ext.sumocfg"):
         """
         Initialize PlatooningEnv.
 
@@ -21,14 +21,8 @@ class PlatooningEnv(AECEnv):
         super().__init__()
         self.sumo_binary = checkBinary('sumo-gui')
         self.sumo_cfg_path = sumo_cfg_path
-        self._start_sumo()
-
-        self.agents = []
-        self.leader = None
-        self.follower = None
-        self.STEPS = 0
-        self.headway_details = []
-        self.initialized = False
+        self.agents = []  # Initialize agents attribute
+        self.initialized = False  # Initialize the initialized attribute
 
     def _start_sumo(self):
         """
@@ -37,6 +31,7 @@ class PlatooningEnv(AECEnv):
         try:
             traci.start([self.sumo_binary, "-c", self.sumo_cfg_path, "--tripinfo-output", "tripinfo.xml"])
             print("SUMO simulation started successfully.")
+            self.initialized = True  # Set initialized to True after starting SUMO
         except traci.exceptions.FatalTraCIError:
             raise RuntimeError("Failed to start SUMO simulation")
 
@@ -46,39 +41,36 @@ class PlatooningEnv(AECEnv):
         """
         traci.close()
 
-    def initialize_after_steps(self, num_steps=20):
+    def observe(self, agents):
         """
-        Initialize the environment after a certain number of steps.
-        """
-        for _ in range(num_steps):
-            traci.simulationStep()
-            self.STEPS += 1
-
-        self.initialized = True
-        self.agents = traci.vehicle.getIDList()
-
-    def observe(self, agent):
-        """
-        Obtain observation for the agent.
+        Obtain observations for the agents that are present in the simulation.
 
         Args:
-            agent (str): Agent ID.
+            agents (list): List of agent IDs.
 
         Returns:
-            numpy.array: Observation for the agent.
+            dict: Dictionary containing observations for each agent.
         """
+        observations = {}
+
         try:
-            current_speed_follower = traci.vehicle.getSpeed(agent)
-            leader_info = traci.vehicle.getLeader(agent)
-            if leader_info is not None:
-                current_headway = leader_info[1]
-                self.headway_details.append(current_headway)
-            else:
-                current_headway = 100
-            return np.array([current_speed_follower, current_headway], dtype=np.float32)
+            for agent in agents:
+                if traci.vehicle.getIDList().count(agent) > 0:
+                    current_speed_follower = traci.vehicle.getSpeed(agent)
+                    leader_info = traci.vehicle.getLeader(agent)
+                    if leader_info is not None:
+                        current_headway = leader_info[1]
+                    else:
+                        current_headway = 100  # Set a default value for headway if leader is not found
+                    observations[agent] = np.array([current_speed_follower, current_headway], dtype=np.float32)
+                else:
+                    # Vehicle not present in the simulation, skip observation
+                    pass
         except traci.exceptions.TraCIException as e:
-            print(f"Error retrieving observation for agent {agent}: {e}")
-            return np.array([0, 0], dtype=np.float32)
+            print(f"Error retrieving observations for agents: {e}")
+            observations = {agent: np.array([0, 0], dtype=np.float32) for agent in agents}
+
+        return observations
 
     def step(self, action):
         """
@@ -95,30 +87,24 @@ class PlatooningEnv(AECEnv):
 
         self.STEPS += 1
 
+        observations = {}
+        rewards = {}
+
+        # Get list of vehicles present in the simulation
+        present_vehicles = traci.vehicle.getIDList()
+
         for agent, act in action.items():
             try:
-                traci.vehicle.setSpeed(agent, 20 if act == 0 else (10 if act == 1 else 15))
+                if present_vehicles.count(agent) > 0:
+                    traci.vehicle.setSpeed(agent, 20 if act == 0 else (10 if act == 1 else 15))
+                else:
+                    print(f"Vehicle {agent} is not known. Skipping action execution.")
             except traci.exceptions.TraCIException as e:
                 print(f"Error executing action for agent {agent}: {e}")
 
         traci.simulationStep()
 
-        observations = {agent: self.observe(agent) for agent in self.agents}
-
-        # Record headway details for all agents
-        headways = {}
-        for agent in self.agents:
-            leader_info = traci.vehicle.getLeader(agent)
-            if leader_info is not None:
-                _, current_headway = leader_info
-                headways[agent] = current_headway
-            else:
-                headways[agent] = -1  # Placeholder value for missing leader
-        self.headway_details.append(headways)
-
-        # Compute rewards
-        rewards = {}
-        for agent in self.agents:
+        for agent in present_vehicles:
             try:
                 current_speed_follower = traci.vehicle.getSpeed(agent)
                 leader_info = traci.vehicle.getLeader(agent)
@@ -136,14 +122,19 @@ class PlatooningEnv(AECEnv):
                     # Additional reward for maintaining platooning speed
                     rewards[agent] += 0.1 * (20 - abs(current_speed_follower - 20))
                 else:
+                    current_headway = 100  # Set a default value for headway if leader is not found
                     rewards[agent] = -1  # Penalize for not having a leader
             except traci.exceptions.TraCIException as e:
-                print(f"Error computing rewards for agent {agent}: {e}")
+                print(f"Error processing agent {agent}: {e}")
 
-        done = self.STEPS >= TOTAL_STEPS
-        info = {}
+            observations[agent] = np.array([current_speed_follower, current_headway], dtype=np.float32)
 
-        return observations, rewards, done, info
+        done = self.STEPS >= TOTAL_STEPS or not traci.simulation.getMinExpectedNumber() > 0
+
+        if done:
+            self.close()  # Close the environment if simulation is done
+
+        return observations, rewards, done, {}
 
     def reset(self):
         """
@@ -153,13 +144,15 @@ class PlatooningEnv(AECEnv):
             dict: Initial observation.
         """
         self.STEPS = 0
-        self.initialized = False
-        self._stop_sumo()
         self._start_sumo()
 
-        self.headway_details = []
+        # Wait until all vehicles are initialized in the simulation
+        while traci.simulation.getMinExpectedNumber() > len(traci.vehicle.getIDList()):
+            traci.simulationStep()
 
-        self.initialize_after_steps()
+        self.agents = traci.vehicle.getIDList()
+
+        self.headway_details = []
 
         return {agent: self.observe(agent) for agent in self.agents}
 
