@@ -1,5 +1,123 @@
-from platooning_env import PlatooningEnv
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import random
+from collections import namedtuple, deque
+from platooning_env import PlatooningEnv
+
+# Define hyperparameters
+BUFFER_SIZE = int(1e5)  # replay buffer size
+BATCH_SIZE = 64         # minibatch size
+GAMMA = 0.99            # discount factor
+TAU = 1e-3              # for soft update of target parameters
+LR = 5e-4               # learning rate
+UPDATE_EVERY = 4        # how often to update the network
+NUM_EPISODES = 5        # number of episodes
+EPS_START = 1.0         # Initial epsilon
+EPS_END = 0.01          # Minimum epsilon
+EPS_DECAY = 0.995       # Epsilon decay rate
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+class DQNAgent:
+    def __init__(self, state_size, action_size, seed):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.seed = random.seed(seed)
+        self.epsilon = EPS_START
+        self.qnetwork_local = QNetwork(state_size, action_size, seed).to(device)
+        self.qnetwork_target = QNetwork(state_size, action_size, seed).to(device)
+        self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
+        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+        self.t_step = 0
+
+    def step(self, state, action, reward, next_state, done):
+        self.memory.add(state, action, reward, next_state, done)
+        self.t_step = (self.t_step + 1) % UPDATE_EVERY
+        if self.t_step == 0 and len(self.memory) > BATCH_SIZE:
+            experiences = self.memory.sample()
+            self.learn(experiences, GAMMA)
+
+    def act(self, state):
+        # Epsilon-greedy action selection
+        if random.random() > self.epsilon:
+            state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+            self.qnetwork_local.eval()
+            with torch.no_grad():
+                action_values = self.qnetwork_local(state)
+            self.qnetwork_local.train()
+            return np.argmax(action_values.cpu().data.numpy())
+        else:
+            return np.random.choice(np.arange(self.action_size))
+
+    def learn(self, experiences, gamma):
+        states, actions, rewards, next_states, dones = experiences
+
+        # Get max predicted Q values (for next states) from target model
+        Q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(1)
+        # Compute Q targets for current states
+        Q_targets = rewards + (gamma * Q_targets_next * (1 - dones))
+
+        # Get expected Q values from local model
+        Q_expected = self.qnetwork_local(states).gather(1, actions)
+
+        # Compute loss
+        loss = F.mse_loss(Q_expected, Q_targets)
+        # Minimize the loss
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        # Update target network
+        self.soft_update(self.qnetwork_local, self.qnetwork_target, TAU)
+
+    def soft_update(self, local_model, target_model, tau):
+        """Soft update model parameters."""
+        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
+            target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
+
+# Define QNetwork class
+class QNetwork(nn.Module):
+    def __init__(self, state_size, action_size, seed, fc1_units=64, fc2_units=64):
+        super(QNetwork, self).__init__()
+        self.seed = torch.manual_seed(seed)
+        self.fc1 = nn.Linear(state_size, fc1_units)
+        self.fc2 = nn.Linear(fc1_units, fc2_units)
+        self.fc3 = nn.Linear(fc2_units, action_size)
+
+    def forward(self, state):
+        x = F.relu(self.fc1(state))
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
+
+# Define ReplayBuffer class
+class ReplayBuffer:
+    def __init__(self, action_size, buffer_size, batch_size, seed):
+        self.action_size = action_size
+        self.memory = deque(maxlen=buffer_size)  
+        self.batch_size = batch_size
+        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
+        self.seed = random.seed(seed)
+    
+    def add(self, state, action, reward, next_state, done):
+        e = self.experience(state, action, reward, next_state, done)
+        self.memory.append(e)
+    
+    def sample(self):
+        experiences = random.sample(self.memory, k=self.batch_size)
+
+        states = torch.from_numpy(np.vstack([e.state for e in experiences if e is not None])).float().to(device)
+        actions = torch.from_numpy(np.vstack([e.action for e in experiences if e is not None])).long().to(device)
+        rewards = torch.from_numpy(np.vstack([e.reward for e in experiences if e is not None])).float().to(device)
+        next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences if e is not None])).float().to(device)
+        dones = torch.from_numpy(np.vstack([e.done for e in experiences if e is not None]).astype(np.uint8)).float().to(device)
+  
+        return (states, actions, rewards, next_states, dones)
+
+    def __len__(self):
+        return len(self.memory)
 
 # Create environment instance
 env = PlatooningEnv()
@@ -7,55 +125,47 @@ env = PlatooningEnv()
 # Initialize environment after a certain number of steps
 env.initialize_after_steps(21)
 
-# Define the number of episodes
-NUM_EPISODES = 5  # For example, run 10 episodes
+# Create DQN agent instance
+agent = DQNAgent(state_size=2, action_size=3, seed=0)
 
-headway_data_per_agent = {}  # Dictionary to store headway data for each agent
+import numpy as np
 
-# Run episodes
+# Training Loop
 for episode in range(NUM_EPISODES):
-    # Reset environment for new episode
     observations = env.reset()
-    done = False  # Initialize done flag for episode termination
+    done = False
+    total_reward = 0
+    steps = 0
 
-    # Run episode until termination
     while not done:
-        # Select random actions for each agent
-        actions = {agent: np.random.randint(0, 3) for agent in env.agents}  # Assuming 3 discrete actions
-        # Execute actions and get next observations, rewards, termination flag, and additional info
-        next_observations, rewards, done, info = env.step(actions)
-    
-    # Append headway details of this episode for each agent
-    for agent in env.agents:
-        if agent not in headway_data_per_agent:
-            headway_data_per_agent[agent] = []
-        # Check the type of headway data before accessing it
-        for headway in env.headway_details:
-            if isinstance(headway, dict) and agent in headway:
-                headway_data_per_agent[agent].append(headway[agent])
-            else:
-                # Handle cases where headway data is missing or invalid
-                # For example, append a placeholder value or skip this data point
-                headway_data_per_agent[agent].append(np.nan)
+        actions = {agent_id: agent.act(observations[agent_id]) for agent_id in observations}
+        next_observations, rewards, done, _ = env.step(actions)
 
-# Compute statistics of headway for each agent
-for agent, headway_data in headway_data_per_agent.items():
-    mean_headway = np.nanmean(headway_data)
-    median_headway = np.nanmedian(headway_data)
-    std_headway = np.nanstd(headway_data)
-    max_headway = np.nanmax(headway_data)
-    min_headway = np.nanmin(headway_data)
+        for agent_id in observations:
+            state = observations[agent_id]
+            action = actions[agent_id]
+            reward = rewards.get(agent_id, 0)
+            next_state = next_observations.get(agent_id)
 
-    print(f"Agent: {agent}")
-    print("Mean Headway:", mean_headway)
-    print("Median Headway:", median_headway)
-    print("Standard Deviation of Headway:", std_headway)
-    print("Maximum Headway:", max_headway)
-    print("Minimum Headway:", min_headway)
+            if next_state is not None:
+                agent.step(state, action, reward, next_state, done)
+                total_reward += reward
+
+        observations = next_observations
+        steps += 1
+
+    # Apply a more gradual epsilon decay
+    agent.epsilon = max(EPS_END, EPS_START * np.exp(-EPS_DECAY * episode))
+    print(f"Episode {episode + 1}: Total Reward = {total_reward}, Epsilon = {agent.epsilon}")
+
+# Save the trained model
+torch.save(agent.qnetwork_local.state_dict(), 'dqn_platooning_model.pth')
+print("Model saved successfully!")
+
 
 # Save headway data
-print("Total number of headway details:", sum(len(headway_data) for headway_data in headway_data_per_agent.values()))
 env.save_headway_to_csv("headway_data.csv")
 env.save_headway_plot()
+
 # Close environment
 env.close()
