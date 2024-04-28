@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import traci
 import traci.exceptions
+from torch.utils.tensorboard import SummaryWriter
 
 TOTAL_STEPS = 5000
 
@@ -14,7 +15,7 @@ class PlatooningEnv(AECEnv):
         self.sumo_binary = checkBinary('sumo')
         self.sumo_cfg_path = sumo_cfg_path
         self._start_sumo()
-
+        self.writer = SummaryWriter('runs/PlatooningEnv')
         self.agents = {}
         self.STEPS = 0
         self.initialized = False
@@ -53,13 +54,17 @@ class PlatooningEnv(AECEnv):
         except traci.exceptions.TraCIException as e:
             print(f"Error retrieving observation for agent {agent}: {e}")
             return None
-
+    
     def step(self, action):
         if not self.initialized:
             return {agent: self.observe(agent) for agent in self.agents}, {agent: 0 for agent in self.agents}, False, {}
 
         self.STEPS += 1
-
+         # Logs and computation containers
+        actions_taken = {}
+        speeds = {}
+        headways = {}
+        rewards = {}
         # Inside the step method, after updating the simulation
         for agent, act in action.items():
             try:
@@ -67,9 +72,12 @@ class PlatooningEnv(AECEnv):
                 if agent not in traci.vehicle.getIDList():
                     continue  # Skip processing for agents not present in simulation
                     
-                # Update the simulation
-                traci.vehicle.setSpeed(agent, 20 if act == 0 else (10 if act == 1 else 15))
-                
+                # # Update the simulation
+                # traci.vehicle.setSpeed(agent, 20 if act == 0 else (10 if act == 1 else 15))
+                speed = 20 if act == 0 else (10 if act == 1 else 15)
+                traci.vehicle.setSpeed(agent, speed)
+                actions_taken[agent] = speed
+                speeds[agent] = traci.vehicle.getSpeed(agent)
                 # Check if the agent is following a leader
                 leader_info = traci.vehicle.getLeader(agent)
                 is_following_leader = leader_info is not None
@@ -95,7 +103,7 @@ class PlatooningEnv(AECEnv):
 
 
         # Record headway details for all agents
-        headways = {}
+       
         for agent in self.agents:
             try:
                 leader_info = traci.vehicle.getLeader(agent)
@@ -128,6 +136,12 @@ class PlatooningEnv(AECEnv):
                         rewards[agent] = -5  # Penalize for excessive headway
             except traci.exceptions.TraCIException as e:
                 print(f"Error computing rewards for agent {agent}: {e}")
+        # Log details to TensorBoard
+        for agent in actions_taken.keys():
+            self.writer.add_scalar(f'Actions/{agent}', actions_taken[agent], self.STEPS)
+            self.writer.add_scalar(f'Speed/{agent}', speeds[agent], self.STEPS)
+            self.writer.add_scalar(f'Headway/{agent}', headways[agent], self.STEPS)
+            self.writer.add_scalar(f'Rewards/{agent}', rewards[agent], self.STEPS)
 
         done = self.STEPS >= TOTAL_STEPS
         info = {}
@@ -148,7 +162,8 @@ class PlatooningEnv(AECEnv):
 
     def close(self):
         self._stop_sumo()
-
+        self.writer.close()
+    
     def save_headway_to_csv(self, filename="headway_data.csv"):
         # Filter out numerical headway values and keep only dictionaries
         headway_dicts = [entry for entry in self.headway_details if isinstance(entry, dict)]
@@ -160,13 +175,21 @@ class PlatooningEnv(AECEnv):
     def save_headway_plot(self, filename="headway_plot"):
         headway_df = pd.read_csv("headway_data.csv")  # Read headway data from CSV
 
-        # Iterate over each agent's headway data
+         # Iterate over each agent's headway data
         for column in headway_df.columns:
             if column != "ev_0":  # Exclude the ev_0 column
                 plt.figure(figsize=(15, 5))
-                plt.plot(headway_df.index, headway_df[column])
+
+                # Original headway data plot
+                plt.plot(headway_df.index, headway_df[column], label='Original Headway', color='blue')
+
+                # Normalized headway data
+                normalized_headway = (headway_df[column] - headway_df[column].min()) / (headway_df[column].max() - headway_df[column].min())
+                plt.plot(headway_df.index, normalized_headway, label='Normalized Headway', color='red', linestyle='--')
+
                 plt.xlabel("Time Step")
                 plt.ylabel("Headway")
                 plt.title(f"Headway of Agent {column} over Time")
+                plt.legend()
                 plt.savefig(f"{filename}_{column}.png")  # Save plot to a separate image file
                 plt.close()  # Close the plot to release memory
