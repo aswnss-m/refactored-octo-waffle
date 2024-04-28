@@ -7,7 +7,7 @@ import traci
 import traci.exceptions
 from torch.utils.tensorboard import SummaryWriter
 
-TOTAL_STEPS = 1000
+TOTAL_STEPS = 10000
 
 class PlatooningEnv(AECEnv):
     def __init__(self, sumo_cfg_path="./maps/cross/cross_ext.sumocfg"):
