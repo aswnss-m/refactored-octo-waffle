@@ -7,7 +7,7 @@ import traci
 import traci.exceptions
 from torch.utils.tensorboard import SummaryWriter
 
-TOTAL_STEPS = 5000
+TOTAL_STEPS = 1000
 
 class PlatooningEnv(AECEnv):
     def __init__(self, sumo_cfg_path="./maps/cross/cross_ext.sumocfg"):
@@ -15,7 +15,7 @@ class PlatooningEnv(AECEnv):
         self.sumo_binary = checkBinary('sumo')
         self.sumo_cfg_path = sumo_cfg_path
         self._start_sumo()
-        self.writer = SummaryWriter('runs/PlatooningEnv')
+        # self.writer = SummaryWriter('runs/PlatooningEnv')
         self.agents = {}
         self.STEPS = 0
         self.initialized = False
@@ -76,7 +76,7 @@ class PlatooningEnv(AECEnv):
                 # traci.vehicle.setSpeed(agent, 20 if act == 0 else (10 if act == 1 else 15))
                 speed = 20 if act == 0 else (10 if act == 1 else 15)
                 traci.vehicle.setSpeed(agent, speed)
-                actions_taken[agent] = speed
+                actions_taken[agent] = act
                 speeds[agent] = traci.vehicle.getSpeed(agent)
                 # Check if the agent is following a leader
                 leader_info = traci.vehicle.getLeader(agent)
@@ -113,11 +113,12 @@ class PlatooningEnv(AECEnv):
                 else:
                     headways[agent] = -1  # Placeholder value for missing leader
             except traci.exceptions.TraCIException as e:
+                headways[agent] = -1
                 print(e)
         self.headway_details.append(headways)
 
         # Compute rewards
-        rewards = {}
+
         for agent in self.agents:
             try:
                 current_speed_follower = traci.vehicle.getSpeed(agent)
@@ -134,14 +135,20 @@ class PlatooningEnv(AECEnv):
                         rewards[agent] = 5  # Give a positive reward for maintaining safe headway
                     else:
                         rewards[agent] = -5  # Penalize for excessive headway
+                else:
+                    rewards[agent] = 0
             except traci.exceptions.TraCIException as e:
+                rewards[agent] = 0
                 print(f"Error computing rewards for agent {agent}: {e}")
         # Log details to TensorBoard
-        for agent in actions_taken.keys():
-            self.writer.add_scalar(f'Actions/{agent}', actions_taken[agent], self.STEPS)
-            self.writer.add_scalar(f'Speed/{agent}', speeds[agent], self.STEPS)
-            self.writer.add_scalar(f'Headway/{agent}', headways[agent], self.STEPS)
-            self.writer.add_scalar(f'Rewards/{agent}', rewards[agent], self.STEPS)
+        # for agent in self.agents:
+        #     self.writer.add_scalar(f'Actions/{agent}', actions_taken[agent], self.STEPS)
+        #     # self.writer.add_scalar(f'Speed/{agent}', speeds[agent], self.STEPS)
+        #     self.writer.add_scalar(f'Headway/{agent}', headways[agent], self.STEPS)
+        #     try:
+        #         self.writer.add_scalar(f'Rewards/{agent}', rewards[agent], self.STEPS)
+        #     except KeyError as e:
+        #         pass
 
         done = self.STEPS >= TOTAL_STEPS
         info = {}
@@ -162,7 +169,7 @@ class PlatooningEnv(AECEnv):
 
     def close(self):
         self._stop_sumo()
-        self.writer.close()
+        # self.writer.close()
     
     def save_headway_to_csv(self, filename="headway_data.csv"):
         # Filter out numerical headway values and keep only dictionaries

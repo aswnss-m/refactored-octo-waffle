@@ -20,7 +20,10 @@ EPS_START = 1.0         # Initial epsilon
 EPS_END = 0.01          # Minimum epsilon
 EPS_DECAY = 0.995       # Epsilon decay rate
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+print(f'''
+Training started , 
+working on {device}\n
+''')
 class DQNAgent:
     def __init__(self, state_size, action_size, seed):
         self.state_size = state_size
@@ -119,46 +122,50 @@ class ReplayBuffer:
 
     def __len__(self):
         return len(self.memory)
-
+    
 if __name__ == "__main__":
     writer = SummaryWriter('runs/DQN_Plattooning')
     env = PlatooningEnv()
     env.initialize_after_steps(21)
     agent = DQNAgent(state_size=2, action_size=3, seed=0)
 
-    # # Optional: Add model graph to TensorBoard
-    # random_state_example = np.random.rand(1, 2)  # Adjust dimensions as needed
-    # writer.add_graph(agent.qnetwork_local, torch.from_numpy(random_state_example).to(device))
+    best_total_reward = float('-inf')  # Initialize the best total reward to negative infinity
 
     for episode in range(NUM_EPISODES):
         observations = env.reset()
         done = False
         total_reward = 0
+        agent.action_counts = np.zeros(agent.action_size, dtype=int)  # Reset action counts
+        
         while not done:
             actions = {agent_id: agent.act(observations[agent_id]) for agent_id in observations}
             next_observations, rewards, done, _ = env.step(actions)
-
-            for agent_id in observations:
-                state = observations[agent_id]
+            with open('rewards.txt','a') as f:
+                f.write(str(rewards)+'\n')
+            for agent_id in next_observations:
+                state = next_observations[agent_id]
                 action = actions[agent_id]
                 reward = rewards.get(agent_id, 0)
                 next_state = next_observations.get(agent_id)
                 if next_state is not None:
                     agent.step(state, action, reward, next_state, done)
                     total_reward += reward
+        
+        # Log action frequencies and other episode metrics
+        for i, count in enumerate(agent.action_counts):
+            writer.add_scalar(f'Action_frequency/action_{i}', count, episode)
+            writer.add_scalar('Total Reward/Episode', total_reward, episode)
+            writer.add_scalar('Epsilon/Episode', agent.epsilon, episode)
 
-        # Log episode metrics
-        writer.add_scalar('Total Reward/Episode', total_reward, episode)
-        writer.add_scalar('Epsilon/Episode', agent.epsilon, episode)
+        if total_reward > best_total_reward:
+            best_total_reward = total_reward
+            torch.save(agent.qnetwork_local.state_dict(), 'best_dqn_platooning_model.pth')
 
         agent.epsilon = max(EPS_END, EPS_START * np.exp(-EPS_DECAY * episode))
         print(f"Episode {episode + 1}: Total Reward = {total_reward}, Epsilon = {agent.epsilon}")
 
-    torch.save(agent.qnetwork_local.state_dict(), 'dqn_platooning_model.pth')
-    print("Model saved successfully!")
-
     env.save_headway_to_csv("headway_data.csv")
     env.save_headway_plot()
-
     env.close()
     writer.close()
+
