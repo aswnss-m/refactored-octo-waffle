@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import traci
 import traci.exceptions
 
-TOTAL_STEPS = 10000
+TOTAL_STEPS = 5000
 
 class PlatooningEnv(AECEnv):
     def __init__(self, sumo_cfg_path="./maps/cross/cross_ext.sumocfg"):
