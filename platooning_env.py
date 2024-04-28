@@ -6,21 +6,12 @@ import matplotlib.pyplot as plt
 import traci
 import traci.exceptions
 
-TOTAL_STEPS = 1000
+TOTAL_STEPS = 10000
 
 class PlatooningEnv(AECEnv):
-    """
-    Custom PettingZoo environment for vehicle platooning using SUMO simulation.
-    """
-    def __init__(self, sumo_cfg_path="./maps/chmd/chmd.sumocfg"):
-        """
-        Initialize PlatooningEnv.
-
-        Args:
-            sumo_cfg_path (str): Path to the SUMO configuration file.
-        """
+    def __init__(self, sumo_cfg_path="./maps/cross/cross_ext.sumocfg"):
         super().__init__()
-        self.sumo_binary = checkBinary('sumo-gui')
+        self.sumo_binary = checkBinary('sumo')
         self.sumo_cfg_path = sumo_cfg_path
         self._start_sumo()
 
@@ -29,9 +20,6 @@ class PlatooningEnv(AECEnv):
         self.initialized = False
 
     def _start_sumo(self):
-        """
-        Start SUMO simulation.
-        """
         try:
             traci.start([self.sumo_binary, "-c", self.sumo_cfg_path, "--tripinfo-output", "tripinfo.xml"])
             print("SUMO simulation started successfully.")
@@ -39,15 +27,9 @@ class PlatooningEnv(AECEnv):
             raise RuntimeError("Failed to start SUMO simulation")
 
     def _stop_sumo(self):
-        """
-        Stop SUMO simulation.
-        """
         traci.close()
 
     def initialize_after_steps(self, num_steps=20):
-        """
-        Initialize the environment after a certain number of steps.
-        """
         for _ in range(num_steps):
             traci.simulationStep()
             self.STEPS += 1
@@ -56,15 +38,6 @@ class PlatooningEnv(AECEnv):
         self.agents = {agent: self.observe(agent) for agent in traci.vehicle.getIDList()}
 
     def observe(self, agent):
-        """
-        Obtain observation for the agent.
-
-        Args:
-            agent (str): Agent ID.
-
-        Returns:
-            numpy.array: Observation for the agent.
-        """
         try:
             # Check if agent is present in the simulation
             if agent not in traci.vehicle.getIDList():
@@ -82,15 +55,6 @@ class PlatooningEnv(AECEnv):
             return None
 
     def step(self, action):
-        """
-        Execute a step in the environment.
-
-        Args:
-            action (dict): Dictionary mapping agent IDs to their corresponding actions.
-
-        Returns:
-            tuple: Tuple containing observations, rewards, done flag, and info.
-        """
         if not self.initialized:
             return {agent: self.observe(agent) for agent in self.agents}, {agent: 0 for agent in self.agents}, False, {}
 
@@ -162,19 +126,6 @@ class PlatooningEnv(AECEnv):
                         rewards[agent] = 5  # Give a positive reward for maintaining safe headway
                     else:
                         rewards[agent] = -5  # Penalize for excessive headway
-                    """"
-                    if current_headway >= 10 and current_headway <= 20:
-                        rewards[agent] = 0.1 * leader_speed  # Reward for maintaining safe headway
-                    else:
-                        rewards[agent] = -1  # Penalize for unsafe headway
-                    # Penalize for exceeding speed limit
-                    if current_speed_follower > 20:
-                        rewards[agent] -= 0.5 * (current_speed_follower - 20)
-                    # Additional reward for maintaining platooning speed
-                    rewards[agent] += 0.1 * (20 - abs(current_speed_follower - 20))
-                else:
-                    rewards[agent] = -1  # Penalize for not having a leader
-                    """
             except traci.exceptions.TraCIException as e:
                 print(f"Error computing rewards for agent {agent}: {e}")
 
@@ -184,12 +135,6 @@ class PlatooningEnv(AECEnv):
         return observations, rewards, done, info
 
     def reset(self):
-        """
-        Reset the environment to its initial state.
-
-        Returns:
-            dict: Initial observation.
-        """
         self.STEPS = 0
         self.initialized = False
         self._stop_sumo()
@@ -202,18 +147,9 @@ class PlatooningEnv(AECEnv):
         return {agent: self.observe(agent) for agent in self.agents}
 
     def close(self):
-        """
-        Close the environment.
-        """
         self._stop_sumo()
 
     def save_headway_to_csv(self, filename="headway_data.csv"):
-        """
-        Save headway data to a CSV file.
-
-        Args:
-            filename (str): Name of the CSV file.
-        """
         # Filter out numerical headway values and keep only dictionaries
         headway_dicts = [entry for entry in self.headway_details if isinstance(entry, dict)]
         # Convert list of dictionaries to DataFrame
@@ -222,12 +158,6 @@ class PlatooningEnv(AECEnv):
         headway_df.to_csv(filename, index=False)
 
     def save_headway_plot(self, filename="headway_plot"):
-        """
-        Save a plot of headway data for each agent separately to a file.
-
-        Args:
-            filename (str): Base name of the file to save the plots.
-        """
         headway_df = pd.read_csv("headway_data.csv")  # Read headway data from CSV
 
         # Iterate over each agent's headway data

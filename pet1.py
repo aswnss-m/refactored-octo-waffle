@@ -14,7 +14,7 @@ GAMMA = 0.99            # discount factor
 TAU = 1e-3              # for soft update of target parameters
 LR = 5e-4               # learning rate
 UPDATE_EVERY = 4        # how often to update the network
-NUM_EPISODES = 5        # number of episodes
+NUM_EPISODES = 6        # number of episodes
 EPS_START = 1.0         # Initial epsilon
 EPS_END = 0.01          # Minimum epsilon
 EPS_DECAY = 0.995       # Epsilon decay rate
@@ -119,53 +119,45 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.memory)
 
-# Create environment instance
-env = PlatooningEnv()
+if __name__ == "__main__":
+    # Create environment instance
+    env = PlatooningEnv()
 
-# Initialize environment after a certain number of steps
-env.initialize_after_steps(21)
+    # Initialize environment after a certain number of steps
+    env.initialize_after_steps(21)
 
-# Create DQN agent instance
-agent = DQNAgent(state_size=2, action_size=3, seed=0)
+    # Create DQN agent instance
+    agent = DQNAgent(state_size=2, action_size=3, seed=0)
 
-import numpy as np
+    # Training Loop
+    for episode in range(NUM_EPISODES):
+        observations = env.reset()
+        done = False
+        total_reward = 0
+        while not done:
+            actions = {agent_id: agent.act(observations[agent_id]) for agent_id in observations}
+            next_observations, rewards, done, _ = env.step(actions)
 
-# Training Loop
-for episode in range(NUM_EPISODES):
-    observations = env.reset()
-    done = False
-    total_reward = 0
-    steps = 0
+            for agent_id in observations:
+                state = observations[agent_id]
+                action = actions[agent_id]
+                reward = rewards.get(agent_id, 0)
+                next_state = next_observations.get(agent_id)
 
-    while not done:
-        actions = {agent_id: agent.act(observations[agent_id]) for agent_id in observations}
-        next_observations, rewards, done, _ = env.step(actions)
+                if next_state is not None:
+                    agent.step(state, action, reward, next_state, done)
+                    total_reward += reward
 
-        for agent_id in observations:
-            state = observations[agent_id]
-            action = actions[agent_id]
-            reward = rewards.get(agent_id, 0)
-            next_state = next_observations.get(agent_id)
+        agent.epsilon = max(EPS_END, EPS_START * np.exp(-EPS_DECAY * episode))
+        print(f"Episode {episode + 1}: Total Reward = {total_reward}, Epsilon = {agent.epsilon}")
 
-            if next_state is not None:
-                agent.step(state, action, reward, next_state, done)
-                total_reward += reward
+    # Save the trained model
+    torch.save(agent.qnetwork_local.state_dict(), 'dqn_platooning_model.pth')
+    print("Model saved successfully!")
 
-        observations = next_observations
-        steps += 1
+    # Save headway data
+    env.save_headway_to_csv("headway_data.csv")
+    env.save_headway_plot()
 
-    # Apply a more gradual epsilon decay
-    agent.epsilon = max(EPS_END, EPS_START * np.exp(-EPS_DECAY * episode))
-    print(f"Episode {episode + 1}: Total Reward = {total_reward}, Epsilon = {agent.epsilon}")
-
-# Save the trained model
-torch.save(agent.qnetwork_local.state_dict(), 'dqn_platooning_model.pth')
-print("Model saved successfully!")
-
-
-# Save headway data
-env.save_headway_to_csv("headway_data.csv")
-env.save_headway_plot()
-
-# Close environment
-env.close()
+    # Close environment
+    env.close()
