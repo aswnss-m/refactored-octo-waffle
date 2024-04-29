@@ -164,7 +164,7 @@ if __name__ == "__main__":
 
         agent.epsilon = max(EPS_END, EPS_START * np.exp(-EPS_DECAY * episode))
         print(f"Episode {episode + 1}: Total Reward = {total_reward}, Epsilon = {agent.epsilon}")
-
+        torch.save(agent.qnetwork_local.state_dict(), 'final_dqn_platooning_model.pth')
     env.save_headway_to_csv("headway_data.csv")
     env.save_headway_plot()
     env.close()
