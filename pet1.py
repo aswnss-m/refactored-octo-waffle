@@ -160,6 +160,7 @@ if __name__ == "__main__":
         if total_reward > best_total_reward:
             best_total_reward = total_reward
             torch.save(agent.qnetwork_local.state_dict(), 'best_dqn_platooning_model.pth')
+            print('model saved successfully')
 
         agent.epsilon = max(EPS_END, EPS_START * np.exp(-EPS_DECAY * episode))
         print(f"Episode {episode + 1}: Total Reward = {total_reward}, Epsilon = {agent.epsilon}")

@@ -7,7 +7,7 @@ from pet1 import device
 
 # Load the model
 model = QNetwork(state_size=2, action_size=3, seed=0)  # Ensure these parameters match those used during training
-model.load_state_dict(torch.load('best_dqn_platooning_model.pth'))
+model.load_state_dict(torch.load('dqn_platooning_model.pth'))
 model.to(device)
 model.eval()  # Set the model to evaluation mode
 
